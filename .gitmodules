@@ -1,0 +1,3 @@
+[submodule "myo-bluetooth"]
+	path = myo-bluetooth
+	url = git@github.com:lbromo/myo-bluetooth.git
