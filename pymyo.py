@@ -27,7 +27,8 @@ class PyMyo(btle.DefaultDelegate):
 
     _SERVICE_CLASS_UUID = '4248124a7f2c4847b9de04a9xxxx06d5'
 
-    def __init__(self):
+    def __init__(self, iface='/dev/vhci'):
+        self.iface = iface
         self.scanner = btle.Scanner()
         self.scanner.withDelegate(self)
         self.devs = []
@@ -40,7 +41,7 @@ class PyMyo(btle.DefaultDelegate):
 
         for dev in self.devs:
             try:
-                self.peripheral.connect(dev.addr)
+                self.peripheral.connect(dev.addr, iface=self.iface)
             except:
                 print("error connection")
             else:
@@ -89,7 +90,7 @@ class PyMyo(btle.DefaultDelegate):
 
     def handleNotification(self, cHandle, data):
         emg = struct.unpack('16b', data)
-        print(time.time(), cHandle, ' '.join([str(e) for e in emg]))
+        print(self.peripheral.iface, time.time(), cHandle, ' '.join([str(e) for e in emg]))
 
     def handleDiscovery(self, scanEntry, isNewDev, isNewData):
         tmp = '{0:04x}'.format(lib.ControlService)
@@ -112,9 +113,15 @@ class PyMyo(btle.DefaultDelegate):
 
 
 if __name__ == '__main__':
-    m = PyMyo()
-    m.connect()
-    m.enable_services()
+    m1 = PyMyo(iface='0')
+    m1.connect()
 
+    m2 = PyMyo(iface='1')
+    m2.connect()
+
+
+    m1.enable_services()
+    m2.enable_services()
     while True:
-        m.waitForNotifications()
+        m1.waitForNotifications()
+        m2.waitForNotifications()
