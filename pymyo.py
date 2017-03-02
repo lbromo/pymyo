@@ -4,7 +4,7 @@ from myohw import ffi, lib
 import struct
 import time
 
-__DEBUG__ = 1
+__DEBUG__ = 0
 
 _create_cmd={
     lib.myohw_command_set_mode: lambda cmd, payload_size, payload: ffi.new('myohw_command_set_mode_t *', ((cmd, payload_size), *payload)),
@@ -34,7 +34,6 @@ class PyMyo(btle.DefaultDelegate):
         self.devs = []
 
         self.peripheral = btle.Peripheral()
-        self.peripheral.withDelegate(self)
 
     def connect(self):
         self.scanner.scan(2)
@@ -67,11 +66,16 @@ class PyMyo(btle.DefaultDelegate):
         self.peripheral.writeCharacteristic(char.getHandle(), cmd, True)
 
         if imu_mode:
-            self.enable_all_characteristic(lib.ImuDataService)
+            self.imu_handles = self.enable_all_characteristic(lib.ImuDataService)
 
         if emg_mode:
-            self.enable_all_characteristic(lib.EmgDataService)
+            self.emg_handles = self.enable_all_characteristic(lib.EmgDataService)
+            if __DEBUG__:
+                print(self.emg_handles)
 
+        self.peripheral.withDelegate(self)
+   
+ 
     def enable_all_characteristic(self, service_myohw_id):
         service_UUID = self.__get_uuid__(service_myohw_id)
         service = self.peripheral.getServiceByUUID(service_UUID)
@@ -85,12 +89,22 @@ class PyMyo(btle.DefaultDelegate):
                 print('%x' % (client_handle) )
             self.peripheral.writeCharacteristic(client_handle, b'\x01\x00')
 
+        return [c.getHandle() for c in chars]
+
     def waitForNotifications(self, timeout=1):
         self.peripheral.waitForNotifications(timeout)
 
     def handleNotification(self, cHandle, data):
-        emg = struct.unpack('16b', data)
-        print(self.peripheral.iface, time.time(), cHandle, ' '.join([str(e) for e in emg]))
+        try:
+            if cHandle in self.emg_handles:
+                emg = struct.unpack('16b', data)
+                print(self.peripheral.iface, time.time(), cHandle, ' '.join([str(e) for e in emg]))
+            elif cHandle in self.imu_handles:
+                imu = struct.unpack('20b', data)
+                print(self.peripheral.iface, time.time(), cHandle, ' '.join([str(e) for e in imu]))
+
+        except:
+            print('meeh')
 
     def handleDiscovery(self, scanEntry, isNewDev, isNewData):
         tmp = '{0:04x}'.format(lib.ControlService)
@@ -120,8 +134,8 @@ if __name__ == '__main__':
     m2.connect()
 
 
-    m1.enable_services()
-    m2.enable_services()
+    m1.enable_services(imu_mode=1)
+    m2.enable_services(imu_mode=1)
     while True:
         m1.waitForNotifications()
         m2.waitForNotifications()
