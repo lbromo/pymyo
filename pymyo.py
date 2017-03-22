@@ -1,3 +1,19 @@
+################################################################################
+# pymyo.py
+# A small module for interaction with a Myo band using raw bluetooth
+# connection(s). It is build around cffi bindings for the myohw header
+# and bluepy.
+#
+#-------------------------------------------------------------------------------
+# "THE BEER-WARE LICENSE" (Revision 42):
+#
+# <lbromo@protonmail.ch> wrote this file. As long as you retain this notice
+# you can do whatever you want with this stuff. If we meet some day, and you
+# think this stuff is worth it, you can buy me a beer in return.
+#
+# - Lasse Bromose
+#-------------------------------------------------------------------------------
+################################################################################
 from bluepy import btle
 from myohw import ffi, lib
 
