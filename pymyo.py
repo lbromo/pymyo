@@ -39,11 +39,70 @@ def to_bytes(cmd):
     buf = ffi.buffer(cmd)
     return bytes(buf)
 
+class EMG(object):
+
+    def __init__(self, raw_emg_meas):
+        self._myohw_emg_data_t = ffi.new('myohw_emg_data_t *', (raw_emg_meas[0:8], raw_emg_meas[8:]))
+        self.sample1 = self._myohw_emg_data_t.sample1
+        self.sample2 = self._myohw_emg_data_t.sample2
+
+    def __repr__(self):
+        return "EMG Measurement:\nsample1: {}\nsample2: {}".format(
+            list(self.sample1),
+            list(self.sample2))
+
+class IMU(object):
+
+    class Orientation(object):
+
+        def __init__(self, w, x, y, z):
+            self.w = w
+            self.x = x
+            self.y = y
+            self.z = z
+
+        def __repr__(self):
+            return "Orientation: w={}, x={} y={} z={}".format(
+                self.w, self.x, self.y, self.z
+            )
+
+    def __init__(self, raw_imu_meas):
+        orientations_meas = raw_imu_meas[0:4*2]
+        acc_meas = raw_imu_meas[4*2:4*2 + 3*2]
+        gyro_meas = raw_imu_meas[4*2 + 3*2:]
+
+        self._myohw_imu_data_t =  ffi.new('myohw_imu_data_t *',
+                                          (
+                                              struct.unpack('4h', orientations_meas),
+                                              struct.unpack('3h', acc_meas),
+                                              struct.unpack('3h', gyro_meas)
+                                          )
+        )
+        self.orientation = IMU.Orientation(
+            self._myohw_imu_data_t.orientation.w,
+            self._myohw_imu_data_t.orientation.x,
+            self._myohw_imu_data_t.orientation.y,
+            self._myohw_imu_data_t.orientation.z,
+        )
+        self.accelorameter = self._myohw_imu_data_t.accelerometer
+        self.gyroscope = self._myohw_imu_data_t.gyroscope
+
+    def __repr__(self):
+        orientation = str(self.orientation)
+        acc = "Accelorameter: {}".format(list(self.accelorameter))
+        gyro = "Gyroscope: {}".format(list(self.gyroscope))
+        return "IMU Measurement\n" + orientation + "\n" + acc + "\n" + gyro
+
 class PyMyo(btle.DefaultDelegate):
 
     _SERVICE_CLASS_UUID = '4248124a7f2c4847b9de04a9xxxx06d5'
 
-    def __init__(self, iface='/dev/vhci'):
+    def __init__(self, on_emg=None, on_imu=None, iface='0'):
+        assert callable(on_emg) or on_emg == None, 'on_emg must be callable'
+        assert callable(on_imu) or on_imu == None, 'on_imu must be callable'
+        self.on_emg = on_emg
+        self.on_imu = on_imu
+
         self.iface = iface
         self.scanner = btle.Scanner()
         self.scanner.withDelegate(self)
@@ -82,17 +141,38 @@ class PyMyo(btle.DefaultDelegate):
         self.peripheral.writeCharacteristic(char.getHandle(), cmd, True)
 
         if imu_mode:
-            self.imu_handles = self.enable_all_characteristic(lib.ImuDataService)
+            self.imu_handles = self.__enable_all_characteristic__(lib.ImuDataService)
 
         if emg_mode:
-            self.emg_handles = self.enable_all_characteristic(lib.EmgDataService)
-            if __DEBUG__:
-                print(self.emg_handles)
+            self.emg_handles = self.__enable_all_characteristic__(lib.EmgDataService)
 
         self.peripheral.withDelegate(self)
    
- 
-    def enable_all_characteristic(self, service_myohw_id):
+    def waitForNotifications(self, timeout=1):
+        self.peripheral.waitForNotifications(timeout)
+
+    def handleNotification(self, cHandle, data):
+        if self.on_emg and cHandle in self.emg_handles:
+            emg = EMG(data)
+            self.on_emg(emg)
+        elif self.on_imu and cHandle in self.imu_handles:
+            imu = IMU(data)
+            self.on_imu(imu)
+        else:
+            self.__default_on_data__(cHandle, data)
+
+    def handleDiscovery(self, scanEntry, isNewDev, isNewData):
+        tmp = '{0:04x}'.format(lib.ControlService)
+        service_val = ''.join(reversed([tmp[i:i+2] for i in range(0, len(tmp), 2)]))
+        UUID = PyMyo._SERVICE_CLASS_UUID.replace('xxxx', service_val)
+        if isNewDev:
+            if scanEntry.getValueText(0x06) == UUID:
+                if scanEntry.connectable:
+                   if __DEBUG__:
+                       print('Myo found. Addr:', scanEntry.addr)
+                   self.devs.append(scanEntry)
+
+    def __enable_all_characteristic__(self, service_myohw_id):
         service_UUID = self.__get_uuid__(service_myohw_id)
         service = self.peripheral.getServiceByUUID(service_UUID)
         chars = service.getCharacteristics()
@@ -107,31 +187,14 @@ class PyMyo(btle.DefaultDelegate):
 
         return [c.getHandle() for c in chars]
 
-    def waitForNotifications(self, timeout=1):
-        self.peripheral.waitForNotifications(timeout)
+    def __default_on_data__(self, cHandle, data):
+        if cHandle in self.emg_handles:
+            emg = struct.unpack('16b', data)
+            print(self.peripheral.iface, time.time(), cHandle, ' '.join([str(e) for e in emg]))
+        elif cHandle in self.imu_handles:
+            imu = struct.unpack('20b', data)
+            print(self.peripheral.iface, time.time(), cHandle, ' '.join([str(e) for e in imu]))
 
-    def handleNotification(self, cHandle, data):
-        try:
-            if cHandle in self.emg_handles:
-                emg = struct.unpack('16b', data)
-                print(self.peripheral.iface, time.time(), cHandle, ' '.join([str(e) for e in emg]))
-            elif cHandle in self.imu_handles:
-                imu = struct.unpack('20b', data)
-                print(self.peripheral.iface, time.time(), cHandle, ' '.join([str(e) for e in imu]))
-
-        except:
-            print('meeh')
-
-    def handleDiscovery(self, scanEntry, isNewDev, isNewData):
-        tmp = '{0:04x}'.format(lib.ControlService)
-        service_val = ''.join(reversed([tmp[i:i+2] for i in range(0, len(tmp), 2)]))
-        UUID = PyMyo._SERVICE_CLASS_UUID.replace('xxxx', service_val)
-        if isNewDev:
-            if scanEntry.getValueText(0x06) == UUID:
-                if scanEntry.connectable:
-                   if __DEBUG__:
-                       print('Myo found. Addr:', scanEntry.addr)
-                   self.devs.append(scanEntry)
 
     def __get_uuid__(self, myohw_id):
         tmp = '{0:04x}'.format(myohw_id)
@@ -143,15 +206,16 @@ class PyMyo(btle.DefaultDelegate):
 
 
 if __name__ == '__main__':
-    m1 = PyMyo(iface='0')
+    on_meas = lambda m: print(m) 
+    m1 = PyMyo(iface='0', on_emg=on_meas, on_imu=on_meas)
     m1.connect()
 
-    m2 = PyMyo(iface='1')
-    m2.connect()
+    # m2 = PyMyo(iface='1')
+    # m2.connect()
 
 
     m1.enable_services(imu_mode=1)
-    m2.enable_services(imu_mode=1)
+    # m2.enable_services(imu_mode=1)
     while True:
         m1.waitForNotifications()
-        m2.waitForNotifications()
+        # m2.waitForNotifications()
