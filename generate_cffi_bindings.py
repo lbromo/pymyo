@@ -13,13 +13,23 @@
 # - Lasse Bromose
 #-------------------------------------------------------------------------------
 ################################################################################
+import os, io, zipfile
+from urllib import request
+
 import cffi
 
-MYOHW = 'myo-bluetooth/myohw.h'
+HYOHW_URL = 'https://github.com/lbromo/myo-bluetooth/archive/master.zip'
+MYOHW = 'myo-bluetooth-master/myohw.h'
 
 ffi = cffi.FFI()
 
 cdef = ""
+
+if not os.path.exists(MYOHW):
+    request.urlretrieve(HYOHW_URL, 'tmp.zip')
+    with zipfile.ZipFile('tmp.zip') as z:
+        print(z)
+        z.extractall()
 
 with open(MYOHW) as f:
     for l in f.readlines():
