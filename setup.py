@@ -19,6 +19,6 @@ setup(name='pymyo',
       install_requires=["cffi>=1.0.0"],
       setup_requires=["cffi>=1.0.0"],
       ext_modules=[
-          generate_cffi_bindings.ffibuilder.distutils_extension(),
+          generate_cffi_bindings.ffi.distutils_extension(),
       ]
 )
