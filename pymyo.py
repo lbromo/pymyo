@@ -20,7 +20,7 @@ from myohw import ffi, lib
 import struct
 import time
 
-__DEBUG__ = 0
+__DEBUG__ = 1
 
 _create_cmd={
     lib.myohw_command_set_mode: lambda cmd, payload_size, payload: ffi.new('myohw_command_set_mode_t *', ((cmd, payload_size), *payload)),
@@ -116,8 +116,8 @@ class PyMyo(btle.DefaultDelegate):
         for dev in self.devs:
             try:
                 self.peripheral.connect(dev.addr, iface=self.iface)
-            except:
-                print("error connection")
+            except Exception as e:
+                print("error connection:\n", e)
             else:
                 break
 
@@ -204,6 +204,23 @@ class PyMyo(btle.DefaultDelegate):
 
         return UUID
 
+    def __set_sleep_mode__(self, sleep_mode):
+        set_cmd = create_command(
+            lib.myohw_command_set_sleep_mode, 1, # header
+            sleep_mode # payload
+        )
+
+        service_UUID = self.__get_uuid__(lib.ControlService)
+        service = self.peripheral.getServiceByUUID(service_UUID)
+
+        char_UUID = self.__get_uuid__(lib.CommandCharacteristic)
+        char = service.getCharacteristics(char_UUID)[0]
+
+        cmd = to_bytes(set_cmd)
+        self.peripheral.writeCharacteristic(char.getHandle(), cmd, True)
+
+        self.peripheral.withDelegate(self) 
+
 
 if __name__ == '__main__':
     on_meas = lambda m: print(m) 
@@ -213,8 +230,8 @@ if __name__ == '__main__':
     # m2 = PyMyo(iface='1')
     # m2.connect()
 
-
-    m1.enable_services(imu_mode=1)
+    m1.enable_services(imu_mode=0)
+    m1.__set_sleep_mode__(sleep_mode=lib.myohw_sleep_mode_never_sleep)
     # m2.enable_services(imu_mode=1)
     while True:
         m1.waitForNotifications()
