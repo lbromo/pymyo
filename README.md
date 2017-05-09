@@ -8,7 +8,16 @@ EMG have been tested on Linux, and provides data with 2 measurements per pod wit
 
 IMU data is also getting through, but havn't check the sampling frequency.
 
+# Test it
+
+To test it, simply clone it, generate the `CFFI`bindings, and run `pymyo` (there is a minimalistic demo available there) 
+
 1. get it: `git clone --recursive git@github.com:lbromo/PyMyo.git`
 2. `cd PyMyo`
 3. generate cffi bindings: `python generate_cffi_bindings.py`
 4. use it: `python pymyo.py`
+
+# Install it
+
+To install it system wide, invoke `sudo python setup.py install` (not possible with pip, as the installation is a bit hacky)
+
