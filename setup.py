@@ -15,7 +15,7 @@ setup(name='pymyo',
         "Programming Language :: Python :: 3",
         "License :: Beer-Ware License",
       ],
-      py_modules=['pymyo', 'myohw', 'generate_cffi_bindings'],
+      py_modules=['pymyo', 'generate_cffi_bindings'],
       install_requires=["cffi>=1.0.0"],
       setup_requires=["cffi>=1.0.0"],
       ext_modules=[
